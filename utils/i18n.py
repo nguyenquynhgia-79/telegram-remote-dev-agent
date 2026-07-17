@@ -106,8 +106,8 @@ _STRINGS: dict[str, dict[LangCode, str]] = {
             "*Cài đặt*\n"
             "  `/menu` — Bảng điều khiển nút bấm nhanh (Dashboard) 🎛\n"
             "  `/projects` — Quản lý danh sách & chọn dự án con (alias: `/p`) 🗂\n"
-            "  `/lang vi` — Chuyển sang tiếng Việt \ud83c\uddbb\ud83c\uddf3\n"
-            "  `/lang en` — Switch to English \ud83c\uddec\ud83c\udde7\n\n"
+            "  `/lang vi` — Chuyển sang tiếng Việt [VI]\n"
+            "  `/lang en` — Switch to English [EN]\n\n"
             "*AI Context*\n"
             "  `/context` — Xem GEMINI.md (bộ nhớ dài hạn của AI)\n"
             "  `/context update` — Tự động cập nhật GEMINI.md từ project\n\n"
@@ -150,8 +150,8 @@ _STRINGS: dict[str, dict[LangCode, str]] = {
             "*Settings*\n"
             "  `/menu` — Dashboard menu with buttons 🎛\n"
             "  `/projects` — Manage & select active project (alias: `/p`) 🗂\n"
-            "  `/lang vi` — Chuyển sang tiếng Việt \ud83c\uddbb\ud83c\uddf3\n"
-            "  `/lang en` — Switch to English \ud83c\uddec\ud83c\udde7\n\n"
+            "  `/lang vi` — Chuyển sang tiếng Việt [VI]\n"
+            "  `/lang en` — Switch to English [EN]\n\n"
             "*AI Context*\n"
             "  `/context` — View GEMINI.md (AI long-term memory)\n"
             "  `/context update` — Auto-update GEMINI.md from project\n\n"
@@ -165,12 +165,12 @@ _STRINGS: dict[str, dict[LangCode, str]] = {
 
     # ── /lang ─────────────────────────────────────────────────
     "lang_switched_vi": {
-        "vi": "🇻🇳 Đã chuyển sang *tiếng Việt*.",
-        "en": "🇻🇳 Đã chuyển sang *tiếng Việt*.",
+        "vi": "[VI] Đã chuyển sang *tiếng Việt*.",
+        "en": "[VI] Đã chuyển sang *tiếng Việt*.",
     },
     "lang_switched_en": {
-        "vi": "🇬🇧 Switched to *English*.",
-        "en": "🇬🇧 Switched to *English*.",
+        "vi": "[EN] Switched to *English*.",
+        "en": "[EN] Switched to *English*.",
     },
     "lang_already": {
         "vi": "ℹ️ Bot đang dùng ngôn ngữ này rồi.",

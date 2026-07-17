@@ -42,7 +42,6 @@ def get_persistent_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard,
         resize_keyboard=True,
-        persistent=True,
         input_field_placeholder="Chọn lệnh nhanh hoặc nhập yêu cầu..."
     )
 
@@ -100,13 +99,22 @@ async def _send_long(update: Update, text: str, reply_markup=None) -> None:
     Splits the text into chunks and sends each separately.
     Works for both Messages and CallbackQueries.
     """
-    if not text:
+    if reply_markup is None:
+        reply_markup = get_persistent_keyboard()
+
+    # Trích xuất tin nhắn an toàn từ Update hoặc CallbackQuery
+    if hasattr(update, "effective_message") and update.effective_message:
         msg = update.effective_message
+    elif hasattr(update, "message") and update.message:
+        msg = update.message
+    else:
+        msg = update
+
+    if not text:
         if msg:
             await msg.reply_text("(empty response)", reply_markup=reply_markup)
         return
 
-    msg = update.effective_message
     if not msg:
         return
 
@@ -131,13 +139,21 @@ async def _background_task(
     Sends a 'started' message immediately, then sends the result when done.
     Works for both Messages and CallbackQueries.
     """
-    msg = update.effective_message
+    # Trích xuất tin nhắn an toàn từ Update hoặc CallbackQuery
+    if hasattr(update, "effective_message") and update.effective_message:
+        msg = update.effective_message
+    elif hasattr(update, "message") and update.message:
+        msg = update.message
+    else:
+        msg = update
+
     if not msg:
         return
 
     await msg.reply_text(
         t("task_started", msg=start_msg),
         parse_mode="Markdown",
+        reply_markup=get_persistent_keyboard()
     )
 
     async def _run():
@@ -192,19 +208,31 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 @authorized_only
 async def cmd_ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/ping — Kiểm tra bot còn sống."""
-    await update.message.reply_text(t("ping_response"), parse_mode="Markdown")
+    await update.message.reply_text(
+        t("ping_response"),
+        parse_mode="Markdown",
+        reply_markup=get_persistent_keyboard()
+    )
 
 
 @authorized_only
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/status — Tổng quan tài nguyên hệ thống."""
-    await update.message.reply_text(system.get_status(), parse_mode="Markdown")
+    await update.message.reply_text(
+        system.get_status(),
+        parse_mode="Markdown",
+        reply_markup=get_persistent_keyboard()
+    )
 
 
 @authorized_only
 async def cmd_ip(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/ip — Hiển thị IP local và public."""
-    await update.message.reply_text(system.get_ip(), parse_mode="Markdown")
+    await update.message.reply_text(
+        system.get_ip(),
+        parse_mode="Markdown",
+        reply_markup=get_persistent_keyboard()
+    )
 
 
 # ─────────────────────────────────────────────────────────────
@@ -434,11 +462,11 @@ async def cmd_memory(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
     if subcommand == "clear":
         result = modules_memory.clear_history()
-        await update.message.reply_text(result, parse_mode="Markdown")
+        await update.message.reply_text(result, parse_mode="Markdown", reply_markup=get_persistent_keyboard())
 
     elif subcommand == "stats":
         result = modules_memory.get_stats()
-        await update.message.reply_text(result, parse_mode="Markdown")
+        await update.message.reply_text(result, parse_mode="Markdown", reply_markup=get_persistent_keyboard())
 
     elif subcommand.isdigit():
         n = int(subcommand)
