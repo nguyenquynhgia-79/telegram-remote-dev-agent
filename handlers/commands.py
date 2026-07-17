@@ -10,7 +10,7 @@ remains responsive.
 import asyncio
 import logging
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
 
 import config.config as cfg
@@ -32,7 +32,69 @@ logger = logging.getLogger(__name__)
 # Helpers
 # ─────────────────────────────────────────────────────────────
 
-async def _send_long(update: Update, text: str) -> None:
+def get_persistent_keyboard() -> ReplyKeyboardMarkup:
+    """Trả về Bàn phím Thường trực luôn hiển thị dưới chân giao diện Telegram."""
+    keyboard = [
+        ["/menu", "/troly"],
+        ["/projects", "/ls"],
+        ["/ask", "/memory clear"]
+    ]
+    return ReplyKeyboardMarkup(
+        keyboard,
+        resize_keyboard=True,
+        persistent=True,
+        input_field_placeholder="Chọn lệnh nhanh hoặc nhập yêu cầu..."
+    )
+
+
+def get_next_action_suggestion(task_type: str | None) -> str:
+    """Trả về gợi ý hành động lập trình tiếp theo sau khi hoàn thành tác vụ."""
+    if not task_type:
+        return ""
+        
+    suggestions = {
+        "ask": (
+            "\n━━━━━━━━━━━━━━━━━━━━\n"
+            "💡 *Hành động gợi ý tiếp theo:*\n"
+            "• Chạy 🔨 `/buildcheck` để kiểm tra xem code có lỗi biên dịch hay không\n"
+            "• Chạy 📂 `/git status` để xem các file vừa được AI sửa đổi\n"
+            "• Chạy 🌳 `/git diff` để review chi tiết các dòng code thay đổi"
+        ),
+        "build": (
+            "\n━━━━━━━━━━━━━━━━━━━━\n"
+            "💡 *Hành động gợi ý tiếp theo:*\n"
+            "• Chạy 🐳 `/docker restart` nếu cần khởi động lại container để nạp code mới\n"
+            "• Chạy 🧠 `/troly` để xem tổng quan tài nguyên hệ thống hiện tại"
+        ),
+        "buildcheck": (
+            "\n━━━━━━━━━━━━━━━━━━━━\n"
+            "💡 *Hành động gợi ý tiếp theo:*\n"
+            "• Nếu build thành công: Lập trình tiếp tính năng bằng 🤖 `/ask <prompt>`\n"
+            "• Nếu build thất bại: Chạy 🤖 `/ask -l \"Sửa lỗi build này\"` để AI tự động fix code"
+        ),
+        "git_pull": (
+            "\n━━━━━━━━━━━━━━━━━━━━\n"
+            "💡 *Hành động gợi ý tiếp theo:*\n"
+            "• Chạy 🔨 `/build` để biên dịch code mới vừa cập nhật từ GitHub\n"
+            "• Chạy 🧠 `/troly` để xem trạng thái nhánh Git hiện tại"
+        ),
+        "docker_up": (
+            "\n━━━━━━━━━━━━━━━━━━━━\n"
+            "💡 *Hành động gợi ý tiếp theo:*\n"
+            "• Chạy 🐳 `/docker ps` để kiểm tra danh sách các container đang online\n"
+            "• Chạy 🪵 `/docker logs` để theo dõi nhật ký khởi động của các service"
+        ),
+        "projects": (
+            "\n━━━━━━━━━━━━━━━━━━━━\n"
+            "💡 *Hành động gợi ý tiếp theo:*\n"
+            "• Chạy 🧠 `/troly` để quét nhanh Git branch, Docker compose và tài nguyên của dự án mới\n"
+            "• Chạy 📁 `/ls` để duyệt danh mục file trong dự án vừa kích hoạt"
+        )
+    }
+    return suggestions.get(task_type, "")
+
+
+async def _send_long(update: Update, text: str, reply_markup=None) -> None:
     """
     Send a message that may exceed Telegram's 4096-char limit.
     Splits the text into chunks and sends each separately.
@@ -41,7 +103,7 @@ async def _send_long(update: Update, text: str) -> None:
     if not text:
         msg = update.effective_message
         if msg:
-            await msg.reply_text("(empty response)")
+            await msg.reply_text("(empty response)", reply_markup=reply_markup)
         return
 
     msg = update.effective_message
@@ -50,16 +112,19 @@ async def _send_long(update: Update, text: str) -> None:
 
     for i in range(0, len(text), MAX_MESSAGE_LENGTH):
         chunk = text[i:i + MAX_MESSAGE_LENGTH]
+        is_last = (i + MAX_MESSAGE_LENGTH) >= len(text)
+        markup = reply_markup if is_last else None
         try:
-            await msg.reply_text(chunk, parse_mode="Markdown")
+            await msg.reply_text(chunk, parse_mode="Markdown", reply_markup=markup)
         except Exception:  # noqa: BLE001
-            await msg.reply_text(chunk)
+            await msg.reply_text(chunk, reply_markup=markup)
 
 
 async def _background_task(
     update: Update,
     coro_factory,
     start_msg: str,
+    task_type: str | None = None,
 ) -> None:
     """
     Run an async coroutine in the background.
@@ -78,16 +143,27 @@ async def _background_task(
     async def _run():
         try:
             result = await coro_factory()
+            suggestion = get_next_action_suggestion(task_type)
+            
+            # Đính kèm bàn phím thường trực mặc định vào kết quả tác vụ nền
+            kb = get_persistent_keyboard()
+            
             if isinstance(result, list):
-                for part in result:
-                    await _send_long(update, part)
+                for idx, part in enumerate(result):
+                    if idx == len(result) - 1:
+                        part_with_sug = part + suggestion
+                        await _send_long(update, part_with_sug, reply_markup=kb)
+                    else:
+                        await _send_long(update, part)
             else:
-                await _send_long(update, result)
+                result_with_sug = result + suggestion
+                await _send_long(update, result_with_sug, reply_markup=kb)
         except Exception as exc:  # noqa: BLE001
             logger.exception("Background task error")
             await msg.reply_text(
                 t("exec_exception", err=str(exc)),
                 parse_mode="Markdown",
+                reply_markup=get_persistent_keyboard(),
             )
 
     asyncio.create_task(_run())
@@ -100,7 +176,11 @@ async def _background_task(
 @authorized_only
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/start — Thông điệp chào mừng với danh sách lệnh."""
-    await update.message.reply_text(t("start_text"), parse_mode="MarkdownV2")
+    await update.message.reply_text(
+        t("start_text"),
+        parse_mode="MarkdownV2",
+        reply_markup=get_persistent_keyboard()
+    )
 
 
 @authorized_only
@@ -222,7 +302,7 @@ async def cmd_git(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 @authorized_only
 async def cmd_build(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/build — Chạy lệnh build đã cấu hình."""
-    await _background_task(update, build.run_build, t("build_starting"))
+    await _background_task(update, build.run_build, t("build_starting"), task_type="build")
 
 
 @authorized_only
@@ -232,6 +312,7 @@ async def cmd_buildcheck(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         update,
         lambda: modules_buildcheck.run_diagnostics(),
         "Đang chạy build và phân tích lỗi tự động",
+        task_type="buildcheck"
     )
 
 
@@ -246,7 +327,7 @@ async def cmd_docker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     subcommand = args[0].lower() if args else "ps"
 
     if subcommand == "up":
-        await _background_task(update, docker.docker_up, t("docker_running_up"))
+        await _background_task(update, docker.docker_up, t("docker_running_up"), task_type="docker_up")
 
     elif subcommand == "down":
         await _background_task(update, docker.docker_down, t("docker_running_down"))
@@ -303,6 +384,7 @@ async def cmd_ask(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         update,
         lambda p=prompt: ai.ask_ai(p),
         t("ai_running", prompt=prompt[:80]),
+        task_type="ask"
     )
 
 
@@ -375,30 +457,32 @@ async def cmd_memory(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 @authorized_only
 async def cmd_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/menu — Hiển thị dashboard bằng nút bấm Inline Keyboard."""
-    # Bố trí nút bấm theo hàng
+    # Bố trí nút bấm theo mức độ sử dụng giảm dần (Git Status, Build và System lên hàng đầu)
     keyboard = [
         [
-            InlineKeyboardButton("🖥 Status", callback_data="dash_status"),
-            InlineKeyboardButton("🌐 IP Addr", callback_data="dash_ip"),
-            InlineKeyboardButton("🏓 Ping", callback_data="dash_ping")
-        ],
-        [
             InlineKeyboardButton("📂 Git Status", callback_data="dash_git_status"),
-            InlineKeyboardButton("🌳 Branches", callback_data="dash_git_branch"),
-            InlineKeyboardButton("🪵 Last Log", callback_data="dash_git_log")
-        ],
-        [
-            InlineKeyboardButton("📥 Git Pull", callback_data="dash_git_pull"),
             InlineKeyboardButton("🔨 Run Build", callback_data="dash_build")
         ],
         [
-            InlineKeyboardButton("🐳 Docker PS", callback_data="dash_docker_ps"),
-            InlineKeyboardButton("🐳 Docker Up", callback_data="dash_docker_up"),
-            InlineKeyboardButton("🐳 Docker Down", callback_data="dash_docker_down")
+            InlineKeyboardButton("🖥 Status (System)", callback_data="dash_status"),
+            InlineKeyboardButton("🐳 Docker PS", callback_data="dash_docker_ps")
+        ],
+        [
+            InlineKeyboardButton("📥 Git Pull", callback_data="dash_git_pull"),
+            InlineKeyboardButton("🐳 Docker Up", callback_data="dash_docker_up")
+        ],
+        [
+            InlineKeyboardButton("🪵 Git Last Log", callback_data="dash_git_log"),
+            InlineKeyboardButton("🌳 Git Branches", callback_data="dash_git_branch")
         ],
         [
             InlineKeyboardButton("🧠 AI Context Update", callback_data="dash_context_update"),
-            InlineKeyboardButton("📋 View Logs", callback_data="dash_log")
+            InlineKeyboardButton("📋 View Bot Logs", callback_data="dash_log")
+        ],
+        [
+            InlineKeyboardButton("🌐 IP Addr", callback_data="dash_ip"),
+            InlineKeyboardButton("🏓 Ping", callback_data="dash_ping"),
+            InlineKeyboardButton("🐳 Docker Down", callback_data="dash_docker_down")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -440,15 +524,15 @@ async def callback_dispatcher(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif action == "dash_git_log":
         await _background_task(query, lambda: git.git_log(10), t("git_running_log", n=10))
     elif action == "dash_git_pull":
-        await _background_task(query, git.git_pull, t("git_running_pull"))
+        await _background_task(query, git.git_pull, t("git_running_pull"), task_type="git_pull")
         
     elif action == "dash_build":
-        await _background_task(query, build.run_build, t("build_starting"))
+        await _background_task(query, build.run_build, t("build_starting"), task_type="build")
         
     elif action == "dash_docker_ps":
         await _background_task(query, docker.docker_ps, t("docker_running_ps"))
     elif action == "dash_docker_up":
-        await _background_task(query, docker.docker_up, t("docker_running_up"))
+        await _background_task(query, docker.docker_up, t("docker_running_up"), task_type="docker_up")
     elif action == "dash_docker_down":
         await _background_task(query, docker.docker_down, t("docker_running_down"))
         
@@ -463,9 +547,15 @@ async def callback_dispatcher(update: Update, context: ContextTypes.DEFAULT_TYPE
         project_name = action.split("_", 1)[1]
         result_text = modules_projects.select_project(project_name)
         # Edit tin nhắn menu cũ để thông báo kết quả chọn
+        suggestion = get_next_action_suggestion("projects")
         await query.edit_message_text(
-            text=result_text,
+            text=result_text + suggestion,
             parse_mode="Markdown"
+        )
+        # Gửi thêm tin nhắn trắng để kích hoạt update bàn phím thường trực cho Client
+        await query.message.reply_text(
+            "🗂 Dự án mới đã kích hoạt thành công.",
+            reply_markup=get_persistent_keyboard()
         )
         
     elif action.startswith("catpage_"):
