@@ -1,0 +1,8 @@
+# Telegram Bot
+python-telegram-bot==21.9
+
+# System monitoring
+psutil==6.1.1
+
+# Environment variables
+python-dotenv==1.0.1
