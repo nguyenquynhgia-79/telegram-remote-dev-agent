@@ -86,6 +86,7 @@ def select_project(project_name: str) -> str:
             f"📁 Đường dẫn: `{proj_path}`\n"
             f"🐳 Docker Compose: `{has_docker}`\n"
             f"🔨 Lệnh Build: `{build_cmd}`\n\n"
+            f"🧠 _Đã chuyển bộ nhớ AI sang ngữ cảnh của dự án mới\\._\n"
             f"ℹ️ _AI và các lệnh Git, Build, Docker từ bây giờ sẽ chạy bên trong thư mục này\\._"
         )
     else:

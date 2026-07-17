@@ -29,7 +29,13 @@ import config.config as cfg
 
 logger = logging.getLogger(__name__)
 
-HISTORY_FILE: Path = cfg.LOGS_DIR / "history.json"
+def _get_history_file() -> Path:
+    project_name = cfg.get_active_project_name()
+    if project_name:
+        # Sanitize project name to be safe for filenames
+        safe_name = "".join(c if c.isalnum() else "_" for c in project_name)
+        return cfg.LOGS_DIR / f"history_{safe_name}.json"
+    return cfg.LOGS_DIR / "history_root.json"
 
 # Đọc giới hạn từ config (.env) thay vì hardcode
 MAX_HISTORY_ENTRIES: int = cfg.MEMORY_MAX_ENTRIES
@@ -44,8 +50,9 @@ MAX_RESPONSE_STORE_CHARS: int = 1500  # Giảm từ 2000 → 1500 để tiết k
 def _load() -> list[dict]:
     """Đọc toàn bộ history từ file JSON."""
     try:
-        if HISTORY_FILE.exists():
-            return json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
+        history_file = _get_history_file()
+        if history_file.exists():
+            return json.loads(history_file.read_text(encoding="utf-8"))
     except Exception as exc:  # noqa: BLE001
         logger.warning("Không đọc được history: %s", exc)
     return []
@@ -55,7 +62,8 @@ def _save(entries: list[dict]) -> None:
     """Ghi history ra file JSON."""
     try:
         cfg.LOGS_DIR.mkdir(parents=True, exist_ok=True)
-        HISTORY_FILE.write_text(
+        history_file = _get_history_file()
+        history_file.write_text(
             json.dumps(entries, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
@@ -183,7 +191,8 @@ def clear_history() -> str:
         return "ℹ️ *Memory* — Lịch sử đang trống, không có gì để xoá."
 
     try:
-        HISTORY_FILE.write_text("[]", encoding="utf-8")
+        history_file = _get_history_file()
+        history_file.write_text("[]", encoding="utf-8")
         logger.info("History: đã xoá %d entries", count)
         return f"🗑️ *Memory* — Đã xoá *{count}* lần hội thoại."
     except Exception as exc:  # noqa: BLE001
@@ -246,7 +255,8 @@ def get_stats() -> str:
 
     first = entries[0]["timestamp"]
     last  = entries[-1]["timestamp"]
-    size_kb = HISTORY_FILE.stat().st_size / 1024 if HISTORY_FILE.exists() else 0
+    history_file = _get_history_file()
+    size_kb = history_file.stat().st_size / 1024 if history_file.exists() else 0
 
     return (
         f"📊 *Thống kê Memory*\n"

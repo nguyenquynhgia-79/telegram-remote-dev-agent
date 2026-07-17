@@ -201,6 +201,10 @@ async def post_init(application: Application) -> None:
     
     # Khởi động Task giám sát nền tự động
     asyncio.create_task(start_monitor_loop(application))
+    
+    # Khởi động Web App Dashboard
+    from modules.webapp import start_webapp
+    asyncio.create_task(start_webapp())
 
 
 def main() -> None:

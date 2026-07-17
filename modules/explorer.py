@@ -121,6 +121,23 @@ def read_file_paged(filepath_str: str, page: int = 1) -> Tuple[str, Optional[Inl
         # Đọc tất cả các dòng
         with target_file.open("r", encoding="utf-8", errors="replace") as f:
             all_lines = f.readlines()
+            
+        # Tự động che giấu giá trị nhạy cảm nếu là file .env
+        is_sensitive = target_file.name.startswith(".env") or target_file.name.endswith(".pem") or target_file.name.endswith(".key")
+        if is_sensitive:
+            import re
+            masked_lines = []
+            for line in all_lines:
+                # Bỏ qua các dòng comment hoặc dòng trống
+                if line.strip().startswith("#") or not line.strip():
+                    masked_lines.append(line)
+                elif "=" in line:
+                    # Thay thế mọi thứ sau dấu '=' đầu tiên thành ********
+                    line = re.sub(r'(=).*', r'\1********', line)
+                    masked_lines.append(line)
+                else:
+                    masked_lines.append(line)
+            all_lines = masked_lines
 
         total_lines = len(all_lines)
         if total_lines == 0:

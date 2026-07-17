@@ -22,7 +22,7 @@ from config.config import ALLOWED_CHAT_ID
 logger = logging.getLogger(__name__)
 
 # Ngưỡng cảnh báo (%)
-CPU_THRESHOLD = 90.0
+CPU_THRESHOLD = 85.0
 RAM_THRESHOLD = 90.0
 DISK_THRESHOLD = 92.0
 
@@ -91,5 +91,5 @@ async def start_monitor_loop(app: Application) -> None:
         except Exception as exc:
             logger.error("Lỗi trong vòng lặp giám sát: %s", exc)
         
-        # Chạy kiểm tra mỗi 5 phút (300 giây)
-        await asyncio.sleep(300)
+        # Chạy kiểm tra mỗi 30 giây
+        await asyncio.sleep(30)

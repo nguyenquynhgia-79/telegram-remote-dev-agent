@@ -35,7 +35,47 @@ import json
 
 # ── Telegram ──────────────────────────────────────────────────
 BOT_TOKEN: str = _require("BOT_TOKEN")
-ALLOWED_CHAT_ID: int = int(_require("ALLOWED_CHAT_ID"))
+
+_USERS_FILE = Path(__file__).parent.parent / "config" / "users.json"
+
+def get_users() -> dict:
+    """Read users from users.json. If it doesn't exist, create it with ALLOWED_CHAT_ID from .env as admin."""
+    if _USERS_FILE.exists():
+        try:
+            return json.loads(_USERS_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+            
+    # Fallback and initialization
+    try:
+        legacy_id = int(_require("ALLOWED_CHAT_ID"))
+    except Exception:
+        legacy_id = 0
+        
+    default_users = {
+        "admins": [legacy_id] if legacy_id else [],
+        "viewers": []
+    }
+    
+    try:
+        _USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _USERS_FILE.write_text(json.dumps(default_users, indent=4), encoding="utf-8")
+    except Exception:
+        pass
+        
+    return default_users
+
+def get_user_role(chat_id: int) -> str:
+    """Return 'admin', 'viewer', or None based on chat_id."""
+    users = get_users()
+    if chat_id in users.get("admins", []):
+        return "admin"
+    if chat_id in users.get("viewers", []):
+        return "viewer"
+    return None
+
+# Keep legacy for compatibility in other modules until fully migrated, but mark as deprecated mentally
+ALLOWED_CHAT_ID: int = int(_optional("ALLOWED_CHAT_ID", "0"))
 
 # ── Base Directory ────────────────────────────────────────────
 # Thư mục gốc chứa nhiều dự án (Ví dụ: D:\ADMIN)

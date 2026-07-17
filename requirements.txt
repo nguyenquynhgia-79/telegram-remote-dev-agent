@@ -6,3 +6,7 @@ psutil==6.1.1
 
 # Environment variables
 python-dotenv==1.0.1
+
+# Web App Dashboard
+fastapi>=0.100.0
+uvicorn>=0.23.0

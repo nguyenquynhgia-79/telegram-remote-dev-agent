@@ -10,7 +10,7 @@ remains responsive.
 import asyncio
 import logging
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, WebAppInfo
 from telegram.ext import ContextTypes
 
 import config.config as cfg
@@ -22,7 +22,7 @@ import modules.explorer as modules_explorer
 import modules.assistant as modules_assistant
 import modules.buildcheck as modules_buildcheck
 import modules.projects as modules_projects
-from utils.auth import authorized_only
+from utils.auth import authorized_only, requires_role, requires_2fa
 from utils.i18n import t, get_lang, save_lang
 
 logger = logging.getLogger(__name__)
@@ -205,7 +205,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await cmd_start(update, context)
 
 
-@authorized_only
+@requires_role("any")
 async def cmd_ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/ping — Kiểm tra bot còn sống."""
     await update.message.reply_text(
@@ -215,7 +215,7 @@ async def cmd_ping(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-@authorized_only
+@requires_role("any")
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/status — Tổng quan tài nguyên hệ thống."""
     await update.message.reply_text(
@@ -225,7 +225,7 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     )
 
 
-@authorized_only
+@requires_role("any")
 async def cmd_ip(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/ip — Hiển thị IP local và public."""
     await update.message.reply_text(
@@ -328,6 +328,7 @@ async def cmd_git(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 # ─────────────────────────────────────────────────────────────
 
 @authorized_only
+@requires_2fa
 async def cmd_build(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/build — Chạy lệnh build đã cấu hình."""
     await _background_task(update, build.run_build, t("build_starting"), task_type="build")
@@ -386,7 +387,7 @@ async def cmd_docker(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 # Log Commands
 # ─────────────────────────────────────────────────────────────
 
-@authorized_only
+@requires_role("any")
 async def cmd_log(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/log [N] — Hiển thị N dòng log gần nhất (mặc định 100)."""
     args = context.args or []
@@ -482,38 +483,76 @@ async def cmd_memory(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 # Dashboard Menu & Callback Query Handlers
 # ─────────────────────────────────────────────────────────────
 
-@authorized_only
-async def cmd_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/menu — Hiển thị dashboard bằng nút bấm Inline Keyboard."""
-    # Bố trí nút bấm theo mức độ sử dụng giảm dần (Git Status, Build và System lên hàng đầu)
-    keyboard = [
+def _build_main_menu_keyboard() -> InlineKeyboardMarkup:
+    import modules.webapp as webapp
+    url = webapp.WEBAPP_URL or "https://google.com"
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📊 Mở Web App Dashboard", web_app=WebAppInfo(url=url))],
+        [
+            InlineKeyboardButton("🤖 AI Trợ lý", callback_data="dash_troly"),
+            InlineKeyboardButton("🗂 Đổi Dự án", callback_data="dash_projects")
+        ],
+        [
+            InlineKeyboardButton("📂 Git Actions", callback_data="nav_git"),
+            InlineKeyboardButton("🔨 Build Actions", callback_data="nav_build")
+        ],
+        [
+            InlineKeyboardButton("🐳 Docker Actions", callback_data="nav_docker"),
+            InlineKeyboardButton("🖥 System Info", callback_data="nav_system")
+        ]
+    ])
+
+def _build_git_menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📂 Git Status", callback_data="dash_git_status"),
-            InlineKeyboardButton("🔨 Run Build", callback_data="dash_build")
+            InlineKeyboardButton("📥 Git Pull", callback_data="dash_git_pull")
         ],
+        [
+            InlineKeyboardButton("🌳 Git Branches", callback_data="dash_git_branch"),
+            InlineKeyboardButton("🪵 Git Last Log", callback_data="dash_git_log")
+        ],
+        [InlineKeyboardButton("⬅️ Quay lại Menu", callback_data="nav_main")]
+    ])
+
+def _build_docker_menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🐳 Docker PS", callback_data="dash_docker_ps")],
+        [
+            InlineKeyboardButton("🟢 Docker Up", callback_data="dash_docker_up"),
+            InlineKeyboardButton("🔴 Docker Down", callback_data="dash_docker_down")
+        ],
+        [InlineKeyboardButton("⬅️ Quay lại Menu", callback_data="nav_main")]
+    ])
+
+def _build_build_menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🔨 Run Build", callback_data="dash_build"),
+            InlineKeyboardButton("🩺 BuildCheck (AI)", callback_data="dash_buildcheck")
+        ],
+        [InlineKeyboardButton("🧠 AI Context Update", callback_data="dash_context_update")],
+        [InlineKeyboardButton("⬅️ Quay lại Menu", callback_data="nav_main")]
+    ])
+
+def _build_system_menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("🖥 Status (System)", callback_data="dash_status"),
-            InlineKeyboardButton("🐳 Docker PS", callback_data="dash_docker_ps")
+            InlineKeyboardButton("🌐 IP Addr", callback_data="dash_ip")
         ],
         [
-            InlineKeyboardButton("📥 Git Pull", callback_data="dash_git_pull"),
-            InlineKeyboardButton("🐳 Docker Up", callback_data="dash_docker_up")
-        ],
-        [
-            InlineKeyboardButton("🪵 Git Last Log", callback_data="dash_git_log"),
-            InlineKeyboardButton("🌳 Git Branches", callback_data="dash_git_branch")
-        ],
-        [
-            InlineKeyboardButton("🧠 AI Context Update", callback_data="dash_context_update"),
+            InlineKeyboardButton("🏓 Ping", callback_data="dash_ping"),
             InlineKeyboardButton("📋 View Bot Logs", callback_data="dash_log")
         ],
-        [
-            InlineKeyboardButton("🌐 IP Addr", callback_data="dash_ip"),
-            InlineKeyboardButton("🏓 Ping", callback_data="dash_ping"),
-            InlineKeyboardButton("🐳 Docker Down", callback_data="dash_docker_down")
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+        [InlineKeyboardButton("⬅️ Quay lại Menu", callback_data="nav_main")]
+    ])
+
+
+@requires_role("any")
+async def cmd_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/menu — Hiển thị dashboard bằng nút bấm Inline Keyboard."""
+    reply_markup = _build_main_menu_keyboard()
     await update.message.reply_text(
         "🎛 *GQN Bot Dashboard Menu*\n"
         "Nhấn vào các nút bên dưới để điều khiển máy tính nhanh:",
@@ -537,8 +576,29 @@ async def callback_dispatcher(update: Update, context: ContextTypes.DEFAULT_TYPE
     # 1. Trả lời Telegram ngay để tránh nút bấm bị quay tròn (loading)
     await query.answer("⌛ Đang xử lý yêu cầu...")
 
-    # 2. Điều hướng xử lý
-    if action == "dash_status":
+    # 2. Điều hướng UI Menu Phân cấp
+    if action == "nav_main":
+        await query.edit_message_reply_markup(_build_main_menu_keyboard())
+        return
+    elif action == "nav_git":
+        await query.edit_message_reply_markup(_build_git_menu_keyboard())
+        return
+    elif action == "nav_docker":
+        await query.edit_message_reply_markup(_build_docker_menu_keyboard())
+        return
+    elif action == "nav_build":
+        await query.edit_message_reply_markup(_build_build_menu_keyboard())
+        return
+    elif action == "nav_system":
+        await query.edit_message_reply_markup(_build_system_menu_keyboard())
+        return
+
+    # 3. Điều hướng xử lý Logic
+    if action == "dash_troly":
+        await cmd_troly(update, context)
+    elif action == "dash_projects":
+        await cmd_projects(update, context)
+    elif action == "dash_status":
         await query.message.reply_text(system.get_status(), parse_mode="Markdown")
     elif action == "dash_ip":
         await query.message.reply_text(system.get_ip(), parse_mode="Markdown")
@@ -556,6 +616,8 @@ async def callback_dispatcher(update: Update, context: ContextTypes.DEFAULT_TYPE
         
     elif action == "dash_build":
         await _background_task(query, build.run_build, t("build_starting"), task_type="build")
+    elif action == "dash_buildcheck":
+        await _background_task(query, lambda: modules_buildcheck.run_diagnostics(), "Đang chạy build và phân tích lỗi tự động", task_type="buildcheck")
         
     elif action == "dash_docker_ps":
         await _background_task(query, docker.docker_ps, t("docker_running_ps"))
@@ -586,6 +648,25 @@ async def callback_dispatcher(update: Update, context: ContextTypes.DEFAULT_TYPE
             reply_markup=get_persistent_keyboard()
         )
         
+    elif action.startswith("2fa_confirm_"):
+        action_id = action.replace("2fa_confirm_", "")
+        from utils.auth import pending_actions
+        if action_id in pending_actions:
+            pending = pending_actions.pop(action_id)
+            await query.edit_message_text("✅ Đã xác nhận. Đang thực thi lệnh...")
+            await pending["handler"](pending["update"], pending["context"], *pending["args"], **pending["kwargs"])
+        else:
+            await query.edit_message_text("❌ Lệnh xác nhận đã hết hạn hoặc không tồn tại.")
+            
+    elif action.startswith("2fa_cancel_"):
+        action_id = action.replace("2fa_cancel_", "")
+        from utils.auth import pending_actions
+        if action_id in pending_actions:
+            pending_actions.pop(action_id)
+            await query.edit_message_text("❌ Đã hủy thực thi lệnh an toàn.")
+        else:
+            await query.edit_message_text("❌ Lệnh xác nhận đã hết hạn hoặc không tồn tại.")
+            
     elif action.startswith("catpage_"):
         # Format: catpage_<file_id>_<page_num>
         parts = action.split("_")
@@ -685,6 +766,7 @@ async def cmd_cat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 @authorized_only
+@requires_2fa
 async def cmd_run(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/run <command> — Chạy lệnh shell tùy ý trong dự án."""
     cmd_str = " ".join(context.args or []).strip()

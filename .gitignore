@@ -12,7 +12,8 @@ dist/
 build/
 # Local States
 config/active_project.json
-logs/history.json
+config/users.json
+logs/history*.json
 
 .DS_Store
 Thumbs.db
